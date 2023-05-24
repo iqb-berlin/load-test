@@ -2,10 +2,12 @@
 
 source load-test.cfg
 
+DEFAULT_REQUEST_PARAMS="-sSf --retry 3"
+
 echo "StartTime: $(date +%FT%T)"
 
 ### LOGIN
-response=$(curl -sSf -X PUT \
+response=$(curl -X PUT $DEFAULT_REQUEST_PARAMS \
   "${HOSTNAME}/api/session/login" \
   --data-raw "{\"name\":\"${USERNAME}\",\"password\":\"${PASSWORD}\"}")
 if [ ! $? -eq 0 ] ; then
@@ -16,8 +18,8 @@ else
 fi
 
 ### PUT Test
-response=$(curl -sS \
-  -X PUT "${HOSTNAME}/api/test" \
+response=$(curl \
+  -X PUT "${HOSTNAME}/api/test" $DEFAULT_REQUEST_PARAMS \
   --header "AuthToken: ${token}" \
   --data-raw "{\"bookletName\":\"${BOOKLET_NAME}\"}")
 if [ ! $? -eq 0 ] ; then
@@ -28,8 +30,8 @@ else
 fi
 
 ### GET Test
-response_code=$(curl -sSf \
-  -w '%{http_code}' --output /dev/null \
+response_code=$(curl \
+  -w '%{http_code}' $DEFAULT_REQUEST_PARAMS \
   -X GET "${HOSTNAME}/api/test/$testID" \
   --header "AuthToken: ${token}")
 if [ ! $? -eq 0 ] ; then
@@ -39,8 +41,8 @@ fi
 
 ### GET resources
 while read file; do
-  response_code=$(curl -sSf \
-    -w '%{http_code}' --output /dev/null \
+  response_code=$(curl \
+    -w '%{http_code}' $DEFAULT_REQUEST_PARAMS \
     -X GET "${HOSTNAME}/api/test/$testID/resource/${file}" \
     --header "AuthToken: ${token}")
   if [ ! $? -eq 0 ] ; then
@@ -51,8 +53,8 @@ done < $RESOURCE_DIR/resources.txt
 
 ### GET units
 while read file; do
-  response_code=$(curl -s -S -f \
-    -w '%{http_code}' --output /dev/null \
+  response_code=$(curl \
+    -w '%{http_code}' $DEFAULT_REQUEST_PARAMS \
     -X GET "${HOSTNAME}/api/test/$testID/unit/${file}/alias/${file}" \
     --header "AuthToken: ${token}")
   if [ ! $? -eq 0 ] ; then
