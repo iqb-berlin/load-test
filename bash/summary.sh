@@ -4,6 +4,7 @@
 #Param 2: logdir
 
 echo
+echo "SUMMARY"
 echo "Run users: $1"
 
 error_count=$(grep -r "Request-Error:" results/1/* | wc -l)
