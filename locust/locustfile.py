@@ -41,8 +41,8 @@ class QuickstartUser(HttpUser):
             self.client.get('/api/test/' + test_number + '/unit/' + file, headers=headers, name='Unit: ' + file)
 
         for file in config['RESOURCE_FILES']:
-            # self.client.get('/api/test/' + test_number + '/resource/' + file, headers=headers, name=file)
-            self.client.get('/fs/ws_2/Resource/' + file, headers=headers, name='Resource: ' + file)
+            self.client.get('/api/test/' + test_number + '/resource/' + file, headers=headers, name=file)
+            # self.client.get('/fs/ws_2/Resource/' + file, headers=headers, name='Resource: ' + file)
 
     def get_token(self) -> str:
         auth = json.dumps(config['auth'])
