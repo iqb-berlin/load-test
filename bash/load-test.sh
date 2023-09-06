@@ -20,7 +20,15 @@ rm -r results/1
 LOGDIR="results/$(date +%FT%T)"
 mkdir -p $LOGDIR
 
-parallel -j0 --progress --results results "/usr/bin/time -f \"%e\" ./testscript.sh 2>&1" ::: $(seq 1 $1) 1> $LOGDIR/output.log
+### NORMAL ###
+seq $1 | parallel -j0 --progress --results results "/usr/bin/time -f \"%e\" ./testscript.sh 2>&1" 1> $LOGDIR/output.log
+
+### FS ###
 #parallel -j0 --progress --results results "/usr/bin/time -f \"%e\" ./testscript-fs.sh 2>&1" ::: $(seq 1 $1) 1> $LOGDIR/output.log
 
-./summary.sh $1 $LOGDIR
+### MULTI HOST ###
+#parallel -j0 --progress --results results --controlmaster -S 172.28.37.42,: "/usr/bin/time -f \"%e\" ./testscript.sh 2>&1" ::: $(seq 1 $1) 1> $LOGDIR/output.log
+
+#./summary.sh $1 $LOGDIR
+
+#parallel -j0 --results results "/usr/bin/time -f \"%e\" ./testscript.sh 2>&1" ::: $(seq 1 10)

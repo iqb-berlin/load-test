@@ -4,6 +4,7 @@ source load-test.cfg
 
 DEFAULT_REQUEST_PARAMS="-sSf --retry 3"
 
+hostname
 echo "StartTime: $(date +%FT%T)"
 
 ### LOGIN
