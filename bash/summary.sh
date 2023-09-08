@@ -7,7 +7,7 @@ echo
 echo "SUMMARY"
 echo "Run users: $1"
 
-error_count=$(grep -r "Request-Error:" results/1/* | wc -l)
+error_count=$(grep -ir "error" results/1/* | wc -l)
 echo "Error Count: $error_count"
 
 if [ ! $error_count -eq 0 ] ; then
