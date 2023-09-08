@@ -12,9 +12,8 @@ import (
     "strconv"
     "strings"
     "time"
+    "os/exec"
 )
-
-//const LogFilePath = "log.txt"
 
 var config Config
 
@@ -28,14 +27,13 @@ type Config struct {
 
 type LoginResult struct {
 	Token  string  `json:"token"`
-    //Error error
 }
 
 func main() {
     logfileName := "results/" + strconv.FormatInt(time.Now().Unix(), 10)
+    fmt.Println("Logging to: " + logfileName)
     logFile, err := os.OpenFile(logfileName, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
     check(err)
-    defer logFile.Close()
     log.SetOutput(logFile)
 
     config = loadConfig()
@@ -48,16 +46,26 @@ func main() {
     for i := 0; i < users; i++ {
         log.Println(<-ch)
     }
+
+    out, err := exec.Command("./summary.sh", os.Args[1], logfileName).Output()
+    check(err)
+    //err = out.Run()
+    //check(err)
+    fmt.Println(string(out))
+
+    err = logFile.Close()
+    check(err)
 }
 
 func loadConfig() Config {
     file, err := os.Open("config.json")
     check(err)
-    defer file.Close()
-
     var cfg Config
     byteValue, _ := io.ReadAll(file)
-    json.Unmarshal(byteValue, &cfg)
+    err = json.Unmarshal(byteValue, &cfg)
+    check(err)
+    err = file.Close()
+    check(err)
     return cfg
 }
 
@@ -91,7 +99,7 @@ func LoadBooklet(ch chan<- string, index string) {
     }
 
     secs := time.Since(start).Seconds()
-    ch <- fmt.Sprintf("%s - %.2f elapsed", index, secs)
+    ch <- fmt.Sprintf("LoadBooklet success: %s - %.2f elapsed", index, secs)
 }
 
 func login() (string, error) {
@@ -104,12 +112,13 @@ func login() (string, error) {
     check(err)
 
     if resp.StatusCode != http.StatusOK {
-        return "", errors.New("login failed: " + resp.Status)
+        return "", errors.New("Error: login failed! Response: " + resp.Status)
     }
 
     body, err := io.ReadAll(resp.Body)
     check(err)
-    defer resp.Body.Close()
+    err = resp.Body.Close()
+    check(err)
 
     var result LoginResult
     err = json.Unmarshal(body, &result)
@@ -129,11 +138,13 @@ func putTest(token string) (string, error) {
     check(err)
 
     if resp.StatusCode != http.StatusCreated {
-        return "", errors.New("putTest Failed: " + resp.Status)
+        return "", errors.New("Error: putTest failed! Response" + resp.Status)
     }
 
     body, err := io.ReadAll(resp.Body)
-    defer resp.Body.Close()
+    check(err)
+    err = resp.Body.Close()
+    check(err)
     return string(body), nil
 }
 
@@ -145,35 +156,38 @@ func getTest(token string, testID string) error {
     resp, _ := client.Do(req)
 
     if resp.StatusCode != http.StatusOK {
-        return errors.New("getTest Failed: " + resp.Status)
+        return errors.New("Error: getTest failed! Response: " + resp.Status)
     }
-    defer resp.Body.Close()
+    err := resp.Body.Close()
+    check(err)
     return nil
 }
 
 func getResource(token string, testID string) error {
     file, err := os.Open(config.ResourceDir + "resources.txt")
     check(err)
-    defer file.Close()
 
     scanner := bufio.NewScanner(file)
     for scanner.Scan() {
+        //fmt.Println("getResource " + scanner.Text())
         req, _:= http.NewRequest(http.MethodGet, config.Hostname + "/api/test/" + testID + "/resource/" + scanner.Text(), nil)
         req.Header.Add("AuthToken", token)
         client := &http.Client{}
         resp, _ := client.Do(req)
         if resp.StatusCode != http.StatusOK {
-            return errors.New("getResource Failed: " + scanner.Text() + " Response: " + resp.Status)
+            return errors.New("Error: getResource failed! File: " + scanner.Text() + " Response: " + resp.Status)
         }
-        defer resp.Body.Close()
+        err = resp.Body.Close()
+        check(err)
     }
+    err = file.Close()
+    check(err)
     return nil
 }
 
 func getUnits(token string, testID string) error {
     file, err := os.Open(config.ResourceDir + "units.txt")
     check(err)
-    defer file.Close()
 
     scanner := bufio.NewScanner(file)
     for scanner.Scan() {
@@ -184,13 +198,15 @@ func getUnits(token string, testID string) error {
         client := &http.Client{}
         resp, _ := client.Do(req)
         if resp.StatusCode != http.StatusOK {
-            return errors.New("getUnit Failed: " + scanner.Text() + " Response: " + resp.Status)
+            return errors.New("Error: getUnit failed! File: " + scanner.Text() + " Response: " + resp.Status)
         }
-        defer resp.Body.Close()
+        err = resp.Body.Close()
+        check(err)
     }
+    err = file.Close()
+    check(err)
     return nil
 }
-
 
 func check(e error) {
     if e != nil {
