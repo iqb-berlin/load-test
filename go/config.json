@@ -1,7 +1,9 @@
 {
-  "hostname": "http://172.28.33.165",
-  "username": "lasttest.gross01.mit",
-  "password": "last",
-  "booklet_name": "BOOKLETV8HT2022ENGTHA",
-  "resource_dir": "../bash/resource/big/"
+  "hostname": "http://localhost",
+  "username": "test-no-pw",
+  "password": "",
+  "booklet_name": "BOOKLET.SAMPLE-1",
+  "resource_dir": "../bash/resource/small/",
+  "retries": 3,
+  "timeout": 2
 }

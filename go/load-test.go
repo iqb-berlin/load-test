@@ -9,10 +9,10 @@ import (
     "log"
     "net/http"
     "os"
+    "os/exec"
     "strconv"
     "strings"
     "time"
-    "os/exec"
 )
 
 var config Config
@@ -23,6 +23,8 @@ type Config struct {
     Password string `json:"password"`
     BookletName string `json:"booklet_name"`
     ResourceDir string `json:"resource_dir"`
+    Retries int `json:"retries"`
+    Timeout int `json:"timeout"`
 }
 
 type LoginResult struct {
@@ -49,8 +51,6 @@ func main() {
 
     out, err := exec.Command("./summary.sh", os.Args[1], logfileName).Output()
     check(err)
-    //err = out.Run()
-    //check(err)
     fmt.Println(string(out))
 
     err = logFile.Close()
@@ -105,60 +105,48 @@ func LoadBooklet(ch chan<- string, index string) {
 func login() (string, error) {
     loginURL := config.Hostname + "/api/session/login"
     payload := fmt.Sprintf("{\"name\": %q, \"password\": %q}", config.Username, config.Password)
-    req, err := http.NewRequest(http.MethodPut, loginURL, strings.NewReader(payload))
-    check(err)
-    client := &http.Client{}
-    resp, err := client.Do(req)
-    check(err)
 
-    if resp.StatusCode != http.StatusOK {
-        return "", errors.New("Error: login failed! Response: " + resp.Status)
+    response, err := makeRequest(http.MethodPut, loginURL, payload, "", http.StatusOK)
+    if err != nil {
+        return "", err
     }
 
-    body, err := io.ReadAll(resp.Body)
+    body, err := io.ReadAll(response.Body)
     check(err)
-    err = resp.Body.Close()
+    err = response.Body.Close()
     check(err)
 
     var result LoginResult
     err = json.Unmarshal(body, &result)
     check(err)
-
     return result.Token, nil
 }
 
 func putTest(token string) (string, error) {
     url := config.Hostname + "/api/test"
     payload := fmt.Sprintf("{\"bookletName\": %q}", config.BookletName)
-    req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(payload))
-    check(err)
-    req.Header.Add("AuthToken", token)
-    client := &http.Client{}
-    resp, err := client.Do(req)
-    check(err)
 
-    if resp.StatusCode != http.StatusCreated {
-        return "", errors.New("Error: putTest failed! Response" + resp.Status)
+    response, err := makeRequest(http.MethodPut, url, payload, token, http.StatusCreated)
+    if err != nil {
+        return "", err
     }
 
-    body, err := io.ReadAll(resp.Body)
+    body, err := io.ReadAll(response.Body)
     check(err)
-    err = resp.Body.Close()
+    err = response.Body.Close()
     check(err)
     return string(body), nil
 }
 
 func getTest(token string, testID string) error {
     url := config.Hostname + "/api/test/" + testID
-    req, _:= http.NewRequest(http.MethodGet, url, nil)
-    req.Header.Add("AuthToken", token)
-    client := &http.Client{}
-    resp, _ := client.Do(req)
 
-    if resp.StatusCode != http.StatusOK {
-        return errors.New("Error: getTest failed! Response: " + resp.Status)
+    response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK)
+    if err != nil {
+        return err
     }
-    err := resp.Body.Close()
+
+    err = response.Body.Close()
     check(err)
     return nil
 }
@@ -169,15 +157,12 @@ func getResource(token string, testID string) error {
 
     scanner := bufio.NewScanner(file)
     for scanner.Scan() {
-        //fmt.Println("getResource " + scanner.Text())
-        req, _:= http.NewRequest(http.MethodGet, config.Hostname + "/api/test/" + testID + "/resource/" + scanner.Text(), nil)
-        req.Header.Add("AuthToken", token)
-        client := &http.Client{}
-        resp, _ := client.Do(req)
-        if resp.StatusCode != http.StatusOK {
-            return errors.New("Error: getResource failed! File: " + scanner.Text() + " Response: " + resp.Status)
+        url := config.Hostname + "/api/test/" + testID + "/resource/" + scanner.Text()
+        response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK)
+        if err != nil {
+            return err
         }
-        err = resp.Body.Close()
+        err = response.Body.Close()
         check(err)
     }
     err = file.Close()
@@ -191,16 +176,12 @@ func getUnits(token string, testID string) error {
 
     scanner := bufio.NewScanner(file)
     for scanner.Scan() {
-        req, _:= http.NewRequest(http.MethodGet,
-            config.Hostname + "/api/test/" + testID + "/unit/" + scanner.Text() + "/alias/"  + scanner.Text(),
-            nil)
-        req.Header.Add("AuthToken", token)
-        client := &http.Client{}
-        resp, _ := client.Do(req)
-        if resp.StatusCode != http.StatusOK {
-            return errors.New("Error: getUnit failed! File: " + scanner.Text() + " Response: " + resp.Status)
+        url := config.Hostname + "/api/test/" + testID + "/unit/" + scanner.Text() + "/alias/"  + scanner.Text()
+        response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK)
+        if err != nil {
+            return err
         }
-        err = resp.Body.Close()
+        err = response.Body.Close()
         check(err)
     }
     err = file.Close()
@@ -208,11 +189,38 @@ func getUnits(token string, testID string) error {
     return nil
 }
 
+func makeRequest(method string, url string, payload string, authToken string, expectedStatus int) (*http.Response, error) {
+    var (
+        request *http.Request
+        response *http.Response
+        err      error = nil
+        retries  int = config.Retries
+    )
+
+    for retries > 0 {
+        request, err = http.NewRequest(method, url, strings.NewReader(payload))
+        request.Header.Add("AuthToken", authToken)
+        check(err)
+        client := &http.Client{Timeout: time.Duration(config.Timeout) * time.Second}
+        response, err = client.Do(request)
+
+        if os.IsTimeout(err)  {
+            err = errors.New("error: " + url + " failed! Timeout")
+            retries -= 1
+        } else {
+          if response.StatusCode != expectedStatus {
+              err = errors.New("error: " + method + " " + url + " failed! Response: " + response.Status)
+              retries -= 1
+          } else {
+              break
+          }
+        }
+    }
+    return response, err
+}
+
 func check(e error) {
     if e != nil {
        panic(e)
     }
-    //if e != nil {
-    //    log.Fatal(e)
-    //}
 }
