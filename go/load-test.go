@@ -42,12 +42,18 @@ func main() {
 
     users, _ := strconv.Atoi(os.Args[1])
     ch := make(chan string)
+
+    start := time.Now()
+
     for i := 0; i < users; i++ {
-        go LoadBooklet(ch, strconv.Itoa(i))
+        go LoadBooklet(ch)
     }
     for i := 0; i < users; i++ {
         log.Println(<-ch)
     }
+
+    secs := time.Since(start).Seconds()
+    log.Printf("Total time: %.2f\n", secs)
 
     out, err := exec.Command("./summary.sh", os.Args[1], logfileName).Output()
     check(err)
@@ -69,7 +75,7 @@ func loadConfig() Config {
     return cfg
 }
 
-func LoadBooklet(ch chan<- string, index string) {
+func LoadBooklet(ch chan<- string) {
     start := time.Now()
 
     token, err := login()
@@ -99,7 +105,7 @@ func LoadBooklet(ch chan<- string, index string) {
     }
 
     secs := time.Since(start).Seconds()
-    ch <- fmt.Sprintf("LoadBooklet success: %s - %.2f elapsed", index, secs)
+    ch <- fmt.Sprintf("LoadBooklet success: %.2f elapsed", secs)
 }
 
 func login() (string, error) {
