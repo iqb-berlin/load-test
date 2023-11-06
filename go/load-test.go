@@ -2,6 +2,7 @@ package main
 
 import (
     "bufio"
+    "crypto/tls"
     "encoding/json"
     "errors"
     "fmt"
@@ -15,21 +16,26 @@ import (
     "time"
 )
 
-var config Config
-
 type Config struct {
     Hostname string `json:"hostname"`
     Username string `json:"username"`
     Password string `json:"password"`
     BookletName string `json:"booklet_name"`
+    Workspace string `json:"workspace"`
     ResourceDir string `json:"resource_dir"`
     Retries int `json:"retries"`
     Timeout int `json:"timeout"`
+    FileServiceMode bool `json:"file_service_mode"`
 }
 
 type LoginResult struct {
 	Token  string  `json:"token"`
+    GroupToken  string  `json:"groupToken"`
 }
+
+var config Config
+var unitList []string
+var resourceList []string
 
 func main() {
     logfileName := "results/" + strconv.FormatInt(time.Now().Unix(), 10)
@@ -39,6 +45,9 @@ func main() {
     log.SetOutput(logFile)
 
     config = loadConfig()
+
+    unitList = readResourceFile(config.ResourceDir + "units.txt")
+    resourceList = readResourceFile(config.ResourceDir + "resources.txt")
 
     users, _ := strconv.Atoi(os.Args[1])
     ch := make(chan string)
@@ -64,7 +73,8 @@ func main() {
 }
 
 func loadConfig() Config {
-    file, err := os.Open("config.json")
+    configPath := os.Args[2]
+    file, err := os.Open(configPath)
     check(err)
     var cfg Config
     byteValue, _ := io.ReadAll(file)
@@ -75,10 +85,23 @@ func loadConfig() Config {
     return cfg
 }
 
+func readResourceFile(filePath string) []string {
+    var fileLines []string
+    file, err := os.Open(filePath)
+    check(err)
+    scanner := bufio.NewScanner(file)
+    for scanner.Scan() {
+        fileLines = append(fileLines, scanner.Text())
+    }
+    err = file.Close()
+    check(err)
+    return fileLines
+}
+
 func LoadBooklet(ch chan<- string) {
     start := time.Now()
 
-    token, err := login()
+    token, groupToken, err := login()
     if err != nil {
         ch <- fmt.Sprintf(err.Error())
         return
@@ -93,7 +116,7 @@ func LoadBooklet(ch chan<- string) {
         ch <- fmt.Sprintf(err.Error())
         return
     }
-    err = getResource(token, testID)
+    err = getResource(token, groupToken, testID)
     if err != nil {
         ch <- fmt.Sprintf(err.Error())
         return
@@ -105,16 +128,16 @@ func LoadBooklet(ch chan<- string) {
     }
 
     secs := time.Since(start).Seconds()
-    ch <- fmt.Sprintf("LoadBooklet success: %.2f elapsed", secs)
+    ch <- fmt.Sprintf("SUCCESS: Loaded booklet in %.2f", secs)
 }
 
-func login() (string, error) {
+func login() (string, string, error) {
     loginURL := config.Hostname + "/api/session/login"
     payload := fmt.Sprintf("{\"name\": %q, \"password\": %q}", config.Username, config.Password)
 
     response, err := makeRequest(http.MethodPut, loginURL, payload, "", http.StatusOK)
     if err != nil {
-        return "", err
+        return "", "", err
     }
 
     body, err := io.ReadAll(response.Body)
@@ -125,7 +148,7 @@ func login() (string, error) {
     var result LoginResult
     err = json.Unmarshal(body, &result)
     check(err)
-    return result.Token, nil
+    return result.Token, result.GroupToken, nil
 }
 
 func putTest(token string) (string, error) {
@@ -157,13 +180,12 @@ func getTest(token string, testID string) error {
     return nil
 }
 
-func getResource(token string, testID string) error {
-    file, err := os.Open(config.ResourceDir + "resources.txt")
-    check(err)
-
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-        url := config.Hostname + "/api/test/" + testID + "/resource/" + scanner.Text()
+func getResource(token string, groupToken string, testID string) error {
+    for _, resource:= range resourceList {
+        url := config.Hostname + "/api/test/" + testID + "/resource/" + resource
+        if config.FileServiceMode {
+            url = config.Hostname + "/fs/file/" + groupToken + "/" + config.Workspace + "/Resource/" + resource
+        }
         response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK)
         if err != nil {
             return err
@@ -171,18 +193,12 @@ func getResource(token string, testID string) error {
         err = response.Body.Close()
         check(err)
     }
-    err = file.Close()
-    check(err)
     return nil
 }
 
 func getUnits(token string, testID string) error {
-    file, err := os.Open(config.ResourceDir + "units.txt")
-    check(err)
-
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-        url := config.Hostname + "/api/test/" + testID + "/unit/" + scanner.Text() + "/alias/"  + scanner.Text()
+    for _, unit:= range unitList {
+        url := config.Hostname + "/api/test/" + testID + "/unit/" + unit + "/alias/"  + unit
         response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK)
         if err != nil {
             return err
@@ -190,8 +206,6 @@ func getUnits(token string, testID string) error {
         err = response.Body.Close()
         check(err)
     }
-    err = file.Close()
-    check(err)
     return nil
 }
 
@@ -200,8 +214,11 @@ func makeRequest(method string, url string, payload string, authToken string, ex
         request *http.Request
         response *http.Response
         err      error = nil
-        retries  int = config.Retries
+        retries  int = config.Retries + 1
     )
+
+    // Ignore self signed cert
+    http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
     for retries > 0 {
         request, err = http.NewRequest(method, url, strings.NewReader(payload))
@@ -211,16 +228,21 @@ func makeRequest(method string, url string, payload string, authToken string, ex
         response, err = client.Do(request)
 
         if os.IsTimeout(err)  {
-            err = errors.New("error: " + url + " failed! Timeout")
             retries -= 1
-        } else {
-          if response.StatusCode != expectedStatus {
-              err = errors.New("error: " + method + " " + url + " failed! Response: " + response.Status)
-              retries -= 1
-          } else {
-              break
-          }
+            if retries > 0 { log.Printf("WARNING: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(retries)) }
+            err = errors.New("ERROR: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(retries))
+            continue
         }
+
+        check(err)
+
+        if response.StatusCode != expectedStatus {
+            retries -= 1
+            if retries > 0 { log.Printf("WARNING: " + method + " " + url + " failed! Response: " + response.Status + "; Retries left: " + strconv.Itoa(retries)) }
+            err = errors.New("ERROR: " + method + " " + url + " failed! Response: " + response.Status)
+            continue
+        }
+        break
     }
     return response, err
 }
