@@ -1,11 +1,11 @@
 {
-  "hostname": "http://testcenter.iqb.hu-berlin.de",
+  "hostname": "https://172.28.33.165",
   "username": "test-no-pw",
   "password": "",
   "booklet_name": "BOOKLET.SAMPLE-1",
   "workspace": "ws_1",
-  "resource_dir": "./resource/small/",
+  "resource_dir": "./resource/small-fs/",
   "retries": 3,
   "timeout": 2,
-  "file_service_mode": false
+  "file_service_mode": true
 }
