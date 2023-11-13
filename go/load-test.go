@@ -229,8 +229,8 @@ func makeRequest(method string, url string, payload string, authToken string, ex
 
         if os.IsTimeout(err)  {
             retries -= 1
-            if retries > 0 { log.Printf("WARNING: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(retries)) }
-            err = errors.New("ERROR: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(retries))
+            log.Printf("WARNING: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(retries))
+            if retries == 0 { err = errors.New("ERROR: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(retries)) }
             continue
         }
 
@@ -238,8 +238,8 @@ func makeRequest(method string, url string, payload string, authToken string, ex
 
         if response.StatusCode != expectedStatus {
             retries -= 1
-            if retries > 0 { log.Printf("WARNING: " + method + " " + url + " failed! Response: " + response.Status + "; Retries left: " + strconv.Itoa(retries)) }
-            err = errors.New("ERROR: " + method + " " + url + " failed! Response: " + response.Status)
+            log.Printf("WARNING: " + method + " " + url + " failed! Response: " + response.Status + "; Retries left: " + strconv.Itoa(retries))
+            if retries == 0 { err = errors.New("ERROR: " + method + " " + url + " failed! Response: " + response.Status) }
             continue
         }
         break
