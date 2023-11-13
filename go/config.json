@@ -1,7 +1,8 @@
 {
-  "hostname": "http://testcenter.iqb.hu-berlin.de",
-  "username": "test-no-pw",
+  "hostname": "<hostname with protocol>",
+  "username": "",
   "password": "",
+  "increment_user_id": true,
   "booklet_name": "BOOKLET.SAMPLE-1",
   "workspace": "ws_1",
   "resource_dir": "./resource/small/",
