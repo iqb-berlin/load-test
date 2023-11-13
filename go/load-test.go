@@ -20,6 +20,7 @@ type Config struct {
     Hostname string `json:"hostname"`
     Username string `json:"username"`
     Password string `json:"password"`
+    IncrementUserID bool `json:"increment_user_id"`
     BookletName string `json:"booklet_name"`
     Workspace string `json:"workspace"`
     ResourceDir string `json:"resource_dir"`
@@ -55,7 +56,7 @@ func main() {
     start := time.Now()
 
     for i := 0; i < users; i++ {
-        go LoadBooklet(ch)
+        go LoadBooklet(ch, i)
     }
     for i := 0; i < users; i++ {
         log.Println(<-ch)
@@ -98,10 +99,10 @@ func readResourceFile(filePath string) []string {
     return fileLines
 }
 
-func LoadBooklet(ch chan<- string) {
+func LoadBooklet(ch chan<- string, i int) {
     start := time.Now()
 
-    token, groupToken, err := login()
+    token, groupToken, err := login(i)
     if err != nil {
         ch <- fmt.Sprintf(err.Error())
         return
@@ -131,9 +132,18 @@ func LoadBooklet(ch chan<- string) {
     ch <- fmt.Sprintf("SUCCESS: Loaded booklet in %.2f", secs)
 }
 
-func login() (string, string, error) {
+func login(usernameSuffix int) (string, string, error) {
     loginURL := config.Hostname + "/api/session/login"
-    payload := fmt.Sprintf("{\"name\": %q, \"password\": %q}", config.Username, config.Password)
+    var payload = ""
+    if config.IncrementUserID {
+        username := config.Username + strconv.Itoa(usernameSuffix + 1)
+        payload = fmt.Sprintf("{\"name\": %q, \"password\": %q}", username, config.Password)
+    } else {
+        payload = fmt.Sprintf("{\"name\": %q, \"password\": %q}", config.Username, config.Password)
+    }
+
+    // single user variant
+    //payload := fmt.Sprintf("{\"name\": %q, \"password\": %q}", config.Username, config.Password)
 
     response, err := makeRequest(http.MethodPut, loginURL, payload, "", http.StatusOK)
     if err != nil {
