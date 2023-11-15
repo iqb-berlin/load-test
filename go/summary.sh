@@ -25,8 +25,10 @@ if [ ! $error_count -eq 0 ] ; then
     echo " Error Code 502: $error_502"
     error_504=$(grep "WARNING" $2 | grep "504 Gateway Timeout" | wc -l)
     echo " Error Code 504: $error_504"
-    error_timeout=$(grep "WARNING" $2 | grep "Timeout; Retries left: 0" | wc -l)
+    error_timeout=$(grep "WARNING" $2 | grep "failed! Timeout; Retries left" | wc -l)
     echo " Error Timeout: $error_timeout"
+    error_connection_reset=$(grep "WARNING" $2 | grep "Connection Reset" | wc -l)
+    echo " Error Connection Reset: $error_connection_reset"
 fi
 
 success_count=$(grep "SUCCESS" $2 | wc -l)
