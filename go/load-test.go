@@ -239,11 +239,11 @@ func makeRequest(method string, url string, payload string, authToken string, ex
 		check(err)
 
 		tr := &http.Transport{
-			MaxIdleConns:       60,
-			IdleConnTimeout:    60 * time.Second,
-			DisableCompression: true,
+			MaxIdleConns:    500,
+			IdleConnTimeout: 5 * time.Minute,
 		}
 		client := &http.Client{Timeout: time.Duration(config.Timeout) * time.Second, Transport: tr}
+		request.Close = true
 		response, err = client.Do(request)
 
 		if os.IsTimeout(err) {
