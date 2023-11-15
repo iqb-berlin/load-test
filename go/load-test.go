@@ -18,16 +18,17 @@ import (
 )
 
 type Config struct {
-	Hostname        string `json:"hostname"`
-	Username        string `json:"username"`
-	Password        string `json:"password"`
-	IncrementUserID bool   `json:"increment_user_id"`
-	BookletName     string `json:"booklet_name"`
-	Workspace       string `json:"workspace"`
-	ResourceDir     string `json:"resource_dir"`
-	Retries         int    `json:"retries"`
-	Timeout         int    `json:"timeout"`
-	FileServiceMode bool   `json:"file_service_mode"`
+	Hostname           string `json:"hostname"`
+	Username           string `json:"username"`
+	Password           string `json:"password"`
+	IncrementUserID    bool   `json:"increment_user_id"`
+	BookletName        string `json:"booklet_name"`
+	Workspace          string `json:"workspace"`
+	ResourceDir        string `json:"resource_dir"`
+	Retries            int    `json:"retries"`
+	Timeout            int    `json:"timeout"`
+	FileServiceMode    bool   `json:"file_service_mode"`
+	SleepBetweenRunsNs int    `json:"sleep_between_runs_ns"`
 }
 
 type LoginResult struct {
@@ -57,6 +58,7 @@ func main() {
 	start := time.Now()
 
 	for i := 0; i < users; i++ {
+		time.Sleep(time.Nanosecond * time.Duration(config.SleepBetweenRunsNs))
 		go LoadBooklet(ch, i)
 	}
 	for i := 0; i < users; i++ {
