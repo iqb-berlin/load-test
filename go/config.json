@@ -5,8 +5,8 @@
   "increment_user_id": true,
   "booklet_name": "BOOKLET.SAMPLE-1",
   "workspace": "ws_1",
-  "resource_dir": "./resource/small/",
+  "resource_dir": "./resource/small-fs/",
   "retries": 3,
-  "timeout": 2,
-  "file_service_mode": false
+  "timeout": 5,
+  "file_service_mode": true
 }
