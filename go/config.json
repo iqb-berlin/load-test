@@ -3,6 +3,7 @@
   "username": "",
   "password": "",
   "increment_user_id": true,
+  "increment_user_id": false,
   "booklet_name": "BOOKLET.SAMPLE-1",
   "workspace": "ws_1",
   "resource_dir": "./resource/small-fs/",
