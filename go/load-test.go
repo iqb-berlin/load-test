@@ -129,7 +129,7 @@ func LoadBooklet(ch chan<- string, userNum int) {
 	}
 
 	secs := time.Since(start).Seconds()
-	ch <- fmt.Sprintf("SUCCESS: (user "+strconv.Itoa(userNum)+") Loaded booklet in %.2f", secs)
+	ch <- fmt.Sprintf("SUCCESS: Loaded booklet in %.2f"+" (user "+strconv.Itoa(userNum)+")", secs)
 }
 
 func login(usernameSuffix int) (string, string, error) {
@@ -238,9 +238,9 @@ func makeRequest(method string, url string, payload string, authToken string, ex
 		if os.IsTimeout(err) {
 			triesLeft -= 1
 			timeout *= 2
-			log.Printf("WARNING: " + "(user " + strconv.Itoa(userNum) + ") " + url + " failed! Timeout; Retries left: " + strconv.Itoa(triesLeft))
+			log.Printf("WARNING: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(triesLeft) + " (user " + strconv.Itoa(userNum) + ") ")
 			if triesLeft == 0 {
-				err = errors.New("ERROR: " + "(user " + strconv.Itoa(userNum) + ") " + url + " failed! Timeout; Retries left: " + strconv.Itoa(triesLeft))
+				err = errors.New("ERROR: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(triesLeft) + " (user " + strconv.Itoa(userNum) + ") ")
 			}
 			continue
 		}
@@ -250,9 +250,9 @@ func makeRequest(method string, url string, payload string, authToken string, ex
 		if response.StatusCode != expectedStatus {
 			triesLeft -= 1
 			timeout *= 2
-			log.Printf("WARNING: " + "(user " + strconv.Itoa(userNum) + ") " + method + " " + url + " failed! Response: " + response.Status + "; Retries left: " + strconv.Itoa(triesLeft))
+			log.Printf("WARNING: " + method + " " + url + " failed! Response: " + response.Status + "; Retries left: " + strconv.Itoa(triesLeft) + " (user " + strconv.Itoa(userNum) + ") ")
 			if triesLeft == 0 {
-				err = errors.New("ERROR: " + "(user " + strconv.Itoa(userNum) + ") " + method + " " + url + " failed! Response: " + response.Status)
+				err = errors.New("ERROR: " + method + " " + url + " failed! Response: " + response.Status + " (user " + strconv.Itoa(userNum) + ") ")
 			}
 			continue
 		}
