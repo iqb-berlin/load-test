@@ -218,27 +218,29 @@ func getUnits(token string, testID string, userNum int) error {
 
 func makeRequest(method string, url string, payload string, authToken string, expectedStatus int, userNum int) (*http.Response, error) {
 	var (
-		request  *http.Request
-		response *http.Response
-		err      error = nil
-		retries  int   = config.Retries + 1
+		request   *http.Request
+		response  *http.Response
+		err       error = nil
+		triesLeft int   = config.Retries + 1
+		timeout   int   = config.Timeout
 	)
 
 	// Ignore self signed cert
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
-	for retries > 0 {
+	for triesLeft > 0 {
 		request, err = http.NewRequest(method, url, strings.NewReader(payload))
 		request.Header.Add("AuthToken", authToken)
 		check(err)
-		client := &http.Client{Timeout: time.Duration(config.Timeout) * time.Second}
+		client := &http.Client{Timeout: time.Duration(timeout) * time.Second}
 		response, err = client.Do(request)
 
 		if os.IsTimeout(err) {
-			retries -= 1
-			log.Printf("WARNING: " + "(user " + strconv.Itoa(userNum) + ") " + url + " failed! Timeout; Retries left: " + strconv.Itoa(retries))
-			if retries == 0 {
-				err = errors.New("ERROR: " + "(user " + strconv.Itoa(userNum) + ") " + url + " failed! Timeout; Retries left: " + strconv.Itoa(retries))
+			triesLeft -= 1
+			timeout *= 2
+			log.Printf("WARNING: " + "(user " + strconv.Itoa(userNum) + ") " + url + " failed! Timeout; Retries left: " + strconv.Itoa(triesLeft))
+			if triesLeft == 0 {
+				err = errors.New("ERROR: " + "(user " + strconv.Itoa(userNum) + ") " + url + " failed! Timeout; Retries left: " + strconv.Itoa(triesLeft))
 			}
 			continue
 		}
@@ -246,9 +248,10 @@ func makeRequest(method string, url string, payload string, authToken string, ex
 		check(err)
 
 		if response.StatusCode != expectedStatus {
-			retries -= 1
-			log.Printf("WARNING: " + "(user " + strconv.Itoa(userNum) + ") " + method + " " + url + " failed! Response: " + response.Status + "; Retries left: " + strconv.Itoa(retries))
-			if retries == 0 {
+			triesLeft -= 1
+			timeout *= 2
+			log.Printf("WARNING: " + "(user " + strconv.Itoa(userNum) + ") " + method + " " + url + " failed! Response: " + response.Status + "; Retries left: " + strconv.Itoa(triesLeft))
+			if triesLeft == 0 {
 				err = errors.New("ERROR: " + "(user " + strconv.Itoa(userNum) + ") " + method + " " + url + " failed! Response: " + response.Status)
 			}
 			continue

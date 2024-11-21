@@ -7,7 +7,7 @@
   "booklet_name": "BOOKLET.SAMPLE-1",
   "workspace": "ws_1",
   "resource_dir": "./resource/small-fs/",
-  "retries": 3,
-  "timeout": 5,
+  "retries": 4,
+  "timeout": 1,
   "file_service_mode": true
 }
