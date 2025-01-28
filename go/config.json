@@ -8,6 +8,6 @@
   "workspace": "ws_1",
   "resource_dir": "./resource/small-fs/",
   "retries": 4,
-  "timeout": 1,
+  "timeout": 300,
   "file_service_mode": true
 }
