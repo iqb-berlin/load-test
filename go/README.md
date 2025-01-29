@@ -21,7 +21,7 @@ Configure test parameters in `config.json` (file name may differ; passed as comm
     - resources.txt and units.txt
     - These contain all the files that the program needs to download, each file on a new line. These files must exist in the workspace.
     - resources.txt and units.txt may be empty to skip loading the type of resource.
-  - `retries` and `timeout` are the number of retries and the timeout in seconds for each request before deemed a failure.
+  - `retries` and `timeout` are the number of retries and the timeout in seconds for each request before deemed a failure. The standard timeout is 5 minutes as in most modern browsers
   - `file_service_mode` adjusts the resource URL, depending on weather the file service is active. Default to `true` 
     starting with Testcenter v15.
 
@@ -34,6 +34,9 @@ Configure test parameters in `config.json` (file name may differ; passed as comm
 ### Results
 The script `summary.sh` is automatically called when all simulated users are finished. It parses the logfile and handily shows
 several values.
+Important metrics for the overall performance are the *number of errors* and the *total time* needed for loading all users.
+Deciding on the number of `retries` and `timeout` will have the *biggest impact* on the result. The less retries allowed and the timeout window shortened, the more users are considered as error. The numbers are to be selected according to ones own specific requirements.
+The number of automatic and manual retries is merely an indicator of how much the system can handle at once and should be mistaken as errors.
 Log files can be accessed in the `results` directory. Files are named by Unix-timestamp.
 
 ### Troubleshooting

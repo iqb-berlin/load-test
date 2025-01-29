@@ -37,6 +37,7 @@ type LoginResult struct {
 var config Config
 var unitList []string
 var resourceList []string
+var RetriesLikeFrontend int = 4
 
 func main() {
 	logfileName := "results/" + strconv.FormatInt(time.Now().Unix(), 10)
@@ -100,39 +101,61 @@ func readResourceFile(filePath string) []string {
 }
 
 func LoadBooklet(ch chan<- string, userNum int) {
+	var retries = config.Retries
 	start := time.Now()
-
-	token, groupToken, err := login(userNum)
-	if err != nil {
-		ch <- fmt.Sprintf(err.Error())
-		return
+	for {
+		token, groupToken, err := login(userNum, retries)
+		if err != nil {
+			if retries > 0 {
+				retries--
+				continue
+			}
+			ch <- fmt.Sprintf(err.Error())
+			return
+		}
+		testID, err := putTest(token, userNum)
+		if err != nil {
+			if retries > 0 {
+				retries--
+				continue
+			}
+			ch <- fmt.Sprintf(err.Error())
+			return
+		}
+		err = getTest(token, testID, userNum)
+		if err != nil {
+			if retries > 0 {
+				retries--
+				continue
+			}
+			ch <- fmt.Sprintf(err.Error())
+			return
+		}
+		err = getResource(token, groupToken, testID, userNum)
+		if err != nil {
+			if retries > 0 {
+				retries--
+				continue
+			}
+			ch <- fmt.Sprintf(err.Error())
+			return
+		}
+		err = getUnits(token, testID, userNum)
+		if err != nil {
+			if retries >= 0 {
+				retries--
+				continue
+			}
+			ch <- fmt.Sprintf(err.Error())
+			return
+		}
+		break
 	}
-	testID, err := putTest(token, userNum)
-	if err != nil {
-		ch <- fmt.Sprintf(err.Error())
-		return
-	}
-	err = getTest(token, testID, userNum)
-	if err != nil {
-		ch <- fmt.Sprintf(err.Error())
-		return
-	}
-	err = getResource(token, groupToken, testID, userNum)
-	if err != nil {
-		ch <- fmt.Sprintf(err.Error())
-		return
-	}
-	err = getUnits(token, testID, userNum)
-	if err != nil {
-		ch <- fmt.Sprintf(err.Error())
-		return
-	}
-
 	secs := time.Since(start).Seconds()
 	ch <- fmt.Sprintf("SUCCESS: Loaded booklet in %.2f"+" (user "+strconv.Itoa(userNum)+")", secs)
 }
 
-func login(usernameSuffix int) (string, string, error) {
+func login(usernameSuffix int, retries int) (string, string, error) {
 	loginURL := config.Hostname + "/api/session/login"
 	var payload = ""
 	if config.IncrementUserID {
@@ -142,7 +165,7 @@ func login(usernameSuffix int) (string, string, error) {
 		payload = fmt.Sprintf("{\"name\": %q, \"password\": %q}", config.Username, config.Password)
 	}
 
-	response, err := makeRequest(http.MethodPut, loginURL, payload, "", http.StatusOK, usernameSuffix)
+	response, err := makeRequest(http.MethodPut, loginURL, payload, "", http.StatusOK, usernameSuffix, retries, false)
 	if err != nil {
 		return "", "", err
 	}
@@ -162,7 +185,7 @@ func putTest(token string, userNum int) (string, error) {
 	url := config.Hostname + "/api/test"
 	payload := fmt.Sprintf("{\"bookletName\": %q}", config.BookletName)
 
-	response, err := makeRequest(http.MethodPut, url, payload, token, http.StatusCreated, userNum)
+	response, err := makeRequest(http.MethodPut, url, payload, token, http.StatusCreated, userNum, RetriesLikeFrontend, true)
 	if err != nil {
 		return "", err
 	}
@@ -177,7 +200,7 @@ func putTest(token string, userNum int) (string, error) {
 func getTest(token string, testID string, userNum int) error {
 	url := config.Hostname + "/api/test/" + testID
 
-	response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK, userNum)
+	response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK, userNum, RetriesLikeFrontend, true)
 	if err != nil {
 		return err
 	}
@@ -193,7 +216,7 @@ func getResource(token string, groupToken string, testID string, userNum int) er
 		if config.FileServiceMode {
 			url = config.Hostname + "/fs/file/" + groupToken + "/" + config.Workspace + "/Resource/" + resource
 		}
-		response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK, userNum)
+		response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK, userNum, RetriesLikeFrontend, true)
 		if err != nil {
 			return err
 		}
@@ -206,7 +229,7 @@ func getResource(token string, groupToken string, testID string, userNum int) er
 func getUnits(token string, testID string, userNum int) error {
 	for _, unit := range unitList {
 		url := config.Hostname + "/api/test/" + testID + "/unit/" + unit + "/alias/" + unit
-		response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK, userNum)
+		response, err := makeRequest(http.MethodGet, url, "", token, http.StatusOK, userNum, RetriesLikeFrontend, true)
 		if err != nil {
 			return err
 		}
@@ -216,19 +239,18 @@ func getUnits(token string, testID string, userNum int) error {
 	return nil
 }
 
-func makeRequest(method string, url string, payload string, authToken string, expectedStatus int, userNum int) (*http.Response, error) {
+func makeRequest(method string, url string, payload string, authToken string, expectedStatus int, userNum int, retries int, automaticRetry bool) (*http.Response, error) {
 	var (
-		request   *http.Request
-		response  *http.Response
-		err       error = nil
-		triesLeft int   = config.Retries + 1
-		timeout   int   = config.Timeout
+		request  *http.Request
+		response *http.Response
+		err      error = nil
+		timeout  int   = config.Timeout
 	)
 
-	// Ignore self signed cert
+	// makes self-signed certs usable -> skip the verification
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
-	for triesLeft > 0 {
+	for {
 		request, err = http.NewRequest(method, url, strings.NewReader(payload))
 		request.Header.Add("AuthToken", authToken)
 		check(err)
@@ -236,28 +258,42 @@ func makeRequest(method string, url string, payload string, authToken string, ex
 		response, err = client.Do(request)
 
 		if os.IsTimeout(err) {
-			triesLeft -= 1
-			timeout *= 2
-			log.Printf("WARNING: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(triesLeft) + " (user " + strconv.Itoa(userNum) + ") ")
-			if triesLeft == 0 {
-				err = errors.New("ERROR: " + url + " failed! Timeout; Retries left: " + strconv.Itoa(triesLeft) + " (user " + strconv.Itoa(userNum) + ") ")
+			if retries > 0 {
+				if automaticRetry {
+					log.Printf("WARNING: " + method + " " + url + " failed! Client Timeout; Automatic retries left: " + strconv.Itoa(retries) + " (user " + strconv.Itoa(userNum) + ") ")
+					time.Sleep(100 * time.Millisecond)
+					retries--
+					continue
+				} else {
+					log.Printf("WARNING: " + method + " " + url + " failed! Client Timeout; Manual retries left: " + strconv.Itoa(retries) + " (user " + strconv.Itoa(userNum) + ") ")
+				}
 			}
-			continue
+			err = errors.New("ERROR: " + method + " " + url + " failed! Client Timeout; (user " + strconv.Itoa(userNum) + ") ")
+			break
 		}
 
 		check(err)
 
 		if response.StatusCode != expectedStatus {
-			triesLeft -= 1
-			timeout *= 2
-			log.Printf("WARNING: " + method + " " + url + " failed! Response: " + response.Status + "; Retries left: " + strconv.Itoa(triesLeft) + " (user " + strconv.Itoa(userNum) + ") ")
-			if triesLeft == 0 {
-				err = errors.New("ERROR: " + method + " " + url + " failed! Response: " + response.Status + " (user " + strconv.Itoa(userNum) + ") ")
+			if retries > 0 {
+				if automaticRetry {
+					if !(response.StatusCode == 403 || response.StatusCode == 401) {
+						log.Printf("WARNING: " + method + " " + url + " failed! Response: " + response.Status + "; Automatic retries left: " + strconv.Itoa(retries) + " (user " + strconv.Itoa(userNum) + ") ")
+						time.Sleep(100 * time.Millisecond)
+						retries--
+						continue
+					}
+				} else {
+					log.Printf("WARNING: " + method + " " + url + " failed! Response: " + response.Status + "; Manual retries left: " + strconv.Itoa(retries) + " (user " + strconv.Itoa(userNum) + ") ")
+				}
 			}
-			continue
+			err = errors.New("ERROR: " + method + " " + url + " failed! Response: " + response.Status + " (user " + strconv.Itoa(userNum) + ")")
+			break
 		}
+
 		break
 	}
+
 	return response, err
 }
 
