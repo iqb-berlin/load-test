@@ -205,6 +205,8 @@ func getTest(token string, testID string, userNum int) error {
 		return err
 	}
 
+	_, err = io.ReadAll(response.Body)
+	check(err)
 	err = response.Body.Close()
 	check(err)
 	return nil
@@ -220,6 +222,9 @@ func getResource(token string, groupToken string, testID string, userNum int) er
 		if err != nil {
 			return err
 		}
+
+		_, err = io.ReadAll(response.Body)
+		check(err)
 		err = response.Body.Close()
 		check(err)
 	}
@@ -233,6 +238,9 @@ func getUnits(token string, testID string, userNum int) error {
 		if err != nil {
 			return err
 		}
+
+		_, err = io.ReadAll(response.Body)
+		check(err)
 		err = response.Body.Close()
 		check(err)
 	}
