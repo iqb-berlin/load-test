@@ -22,7 +22,7 @@ class QuickstartUser(HttpUser):
     @task
     def load_test(self):
         try:
-            token = self.get_token()
+            token, groupToken = self.get_tokens()
         except ValueError:
             return
         headers = {'AuthToken': token}
@@ -35,20 +35,20 @@ class QuickstartUser(HttpUser):
             else:
                 test_number = response.content.decode("utf-8")
 
-        self.client.get("/api/test/" + test_number, headers=headers, name='test')
+        self.client.get("/api/test/" + test_number, headers=headers)
 
         for file in config['UNIT_URLS']:
             self.client.get('/api/test/' + test_number + '/unit/' + file, headers=headers, name='Unit: ' + file)
 
         for file in config['RESOURCE_FILES']:
-            self.client.get('/api/test/' + test_number + '/resource/' + file, headers=headers, name=file)
-            # self.client.get('/fs/ws_2/Resource/' + file, headers=headers, name='Resource: ' + file)
+#             self.client.get('/api/test/' + test_number + '/resource/' + file, headers=headers, name=file)
+            self.client.get('/fs/file/' + groupToken + '/ws_1/Resource/' + file, headers=headers, name='Resource: ' + file)
 
-    def get_token(self) -> str:
+    def get_tokens(self) -> tuple[str, str]:
         auth = json.dumps(config['auth'])
         with self.client.put('/api/session/login', data=auth, catch_response=True) as response:
             if response.status_code == 504:
                 response.failure("Timeout: Getting token failed! (504)")
                 raise ValueError
             else:
-                return response.json()['token']
+                return response.json()['token'], response.json()['groupToken']
