@@ -1,0 +1,8 @@
+DP_start_pc
+Instruktion_Satzteil
+Instruktion_Wortteil
+Satztest_Version_A
+Teil_Ende
+Testende1_BKT
+Testende2_BKT
+Worttest_Version_B

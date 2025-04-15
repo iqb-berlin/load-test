@@ -1,0 +1,4 @@
+locust
+locust-plugins
+pyyaml
+jsonschema

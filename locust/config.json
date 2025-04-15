@@ -1,0 +1,12 @@
+{
+  "hostname": "http://localhost",
+  "username": "test-no-pw",
+  "password": "",
+  "increment_user_id": false,
+  "booklet_name": "BOOKLET.SAMPLE-1",
+  "workspace": "ws_1",
+  "resource_dir": "./resource/small-fs/",
+  "retries": 4,
+  "timeout": 30,
+  "file_service_mode": true
+}
