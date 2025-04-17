@@ -1,7 +1,6 @@
 # Preparation
 
 - Configure test parameters in config.json
-  - This includes valid URL paths for all unit and resource files
     (- Use the url-list-gen.py script in the root of the project to generate the list)
 
 *When testing the Testcenter version with file service, you need to change the path for resource files.

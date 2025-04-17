@@ -1,28 +1,14 @@
 import json
+from tenacity import retry, wait_chain, wait_fixed
 from jsonschema import validate
 from locust import HttpUser, task, run_single_user
-
-config_schema = {
-    "type": "object",
-    "properties": {
-        "hostname": {"type": "string"},
-        "username": {"type": "string"},
-        "password": {"type": "string"},
-        "increment_user_id": {"type": "boolean"},
-        "booklet_name": {"type": "string"},
-        "workspace": {"type": "string"},
-        "resource_dir": {"type": "string"},
-        "retries": {"type": "number"},
-        "timeout": {"type": "number"},
-        "file_service_mode": {"type": "boolean"}
-    }
-}
+import login_util
 
 config = {}
 resource_list = []
 unit_list = []
 global_id = 1
-
+wait_retries_frontend=[wait_fixed(0.05), wait_fixed(0.5), wait_fixed(1), wait_fixed(2)]
 
 def load_config_file():
     global config # Declare config as global to modify it in this scope, for reading not necessary
@@ -31,7 +17,7 @@ def load_config_file():
 
     with open('config.json', 'r') as file:
         config = json.load(file)
-        validate(config, config_schema)
+        validate(config, login_util.config_schema)
     with open(config['resource_dir'] + 'resources.txt', 'r') as file:
         for line in file:
             resource_list.append(line.rstrip())
@@ -40,9 +26,37 @@ def load_config_file():
             unit_list.append(line.rstrip())
 
 
+@retry(wait=wait_chain(*wait_retries_frontend))
+def get_test(i, headers, test_number):
+    login_util.get_test(i, headers, test_number)
+
+@retry(wait=wait_chain(*wait_retries_frontend))
+def get_units(i, headers, test_number):
+    for file in unit_list:
+        with i.client.get('/api/test/' + test_number + '/unit/' + file, headers=headers, name='Unit: ' + file,
+                             timeout=i.timeout, catch_response=True) as response:
+            if response.status_code >= 400:
+                response.failure("Error of some kind")
+            else:
+                response.success()
+
+@retry(wait=wait_chain(*wait_retries_frontend))
+def get_resources(i, groupToken, headers, test_number):
+    for file in resource_list:
+        workspace = config['workspace']
+        if config['file_service_mode'] is False:
+            i.client.get('/api/test/' + test_number + '/resource/' + file, headers=headers, name=file,
+                            timeout=i.timeout)
+        else:
+            with i.client.get(f"/fs/file/{groupToken}/{workspace}/Resource/{file}", headers=headers,
+                                 name='Resource: ' + file, timeout=i.timeout, catch_response=True) as response:
+                if response.status_code >= 400:
+                    response.failure("Error of some kind")
+                else:
+                    response.success()
+
+
 load_config_file()  # call this function on module level for class to attribute "host" to access it at class definition time
-
-
 # timing of this code:
 # -> module level code definitions and function calls
 # -> class definition (w/ class attribute initial values are calculated here)
@@ -64,64 +78,16 @@ class QuickstartUser(HttpUser):
     def load_test(self):
         print('global id ', self.id)
 
-        try:
-            token, groupToken = self.get_tokens()
-        except ValueError:
-            return
+        token, groupToken = login_util.get_tokens(self, config)
         headers = {'AuthToken': token}
 
-        with self.client.put('/api/test', data=json.dumps({'bookletName': config['booklet_name']}),
-                             headers=headers, timeout=self.timeout, catch_response=True) as response:
-            if response.status_code >= 400:
-                response.failure("Error of some kind")
-            else:
-                test_number = response.content.decode("utf-8")
-                response.success()
+        test_number = login_util.put_test(self, headers, config)
 
-        with (self.client.get("/api/test/" + test_number, headers=headers, timeout=self.timeout, catch_response=True)
-              as response):
-            if response.status_code >= 400:
-                response.failure("Error of some kind")
-            else:
-                response.success()
+        get_test(self, headers, test_number)
 
-        for file in unit_list:
-            with self.client.get('/api/test/' + test_number + '/unit/' + file, headers=headers, name='Unit: ' + file,
-                                 timeout=self.timeout, catch_response=True) as response:
-                if response.status_code >= 400:
-                    response.failure("Error of some kind")
-                else:
-                    response.success()
+        get_units(self, headers, test_number)
 
-        for file in resource_list:
-            workspace = config['workspace']
-            if config['file_service_mode'] is False:
-                self.client.get('/api/test/' + test_number + '/resource/' + file, headers=headers, name=file,
-                                timeout=self.timeout)
-            else:
-                with self.client.get(f"/fs/file/{groupToken}/{workspace}/Resource/{file}", headers=headers,
-                                     name='Resource: ' + file, timeout=self.timeout, catch_response=True) as response:
-                    if response.status_code >= 400:
-                        response.failure("Error of some kind")
-                    else:
-                        response.success()
-
-    def get_tokens(self) -> tuple[str, str]:
-        username = config['username']
-        if config['increment_user_id'] is True:
-            username += str(self.id)
-
-        data = json.dumps({'name': username, 'password': config['password']})
-
-        with self.client.put('/api/session/login', data=data, name='putSessionLogin', timeout=self.timeout,
-                             catch_response=True, max_retries=2) as response:
-            if response.status_code >= 400:
-                response.failure("Some error occurred")
-            else:
-                response.success()
-
-        return response.json()['token'], response.json()['groupToken']
-
+        get_resources(self, groupToken, headers, test_number)
 
 if __name__ == "__main__":
     run_single_user(QuickstartUser)

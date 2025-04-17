@@ -1,4 +1,5 @@
+jsonschema
 locust
 locust-plugins
 pyyaml
-jsonschema
+tenacity
