@@ -12,8 +12,10 @@ def load_config_file():
         config = json.load(file)
         validate(config, login_util.config_schema)
 
+load_config_file()
+
 class MinimalUser(FastHttpUser):
-    host = 'http://localhost'
+    host = config['hostname']
 
     @task
     def test_fun(self):

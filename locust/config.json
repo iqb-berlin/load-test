@@ -5,7 +5,7 @@
   "increment_user_id": false,
   "booklet_name": "BOOKLET.SAMPLE-1",
   "workspace": "ws_1",
-  "resource_dir": "./resource/small-fs/",
+  "resource_dir": "./resource/mini/",
   "retries": 4,
   "timeout": 30,
   "file_service_mode": true
