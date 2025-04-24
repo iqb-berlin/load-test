@@ -38,14 +38,14 @@ def put_test(self, headers, config):
                          headers=headers, timeout=self.timeout, catch_response=True) as response:
         if response.status_code >= 400:
             response.failure("Error of some kind")
+            print(response.status_code)
         else:
             test_number = response.content.decode("utf-8")
             response.success()
-
-    return test_number
+            return test_number
 
 def get_test(self, headers, test_number):
-    with (self.client.get("/api/test/" + test_number, headers=headers, timeout=self.timeout, catch_response=True)
+    with (self.client.get("/api/test/" + test_number, headers=headers, timeout=self.timeout, catch_response=True,name='GetTest')
           as response):
         if response.status_code >= 400:
             response.failure("Error of some kind")

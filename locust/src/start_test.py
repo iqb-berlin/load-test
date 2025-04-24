@@ -1,7 +1,7 @@
 import json
 from tenacity import retry, wait_chain, wait_fixed
 from jsonschema import validate
-from locust import HttpUser, task, run_single_user
+from locust import FastHttpUser, task, run_single_user
 import login_util
 
 config = {}
@@ -15,13 +15,13 @@ def load_config_file():
     global resource_list
     global unit_list
 
-    with open('config.json', 'r') as file:
+    with open('config.json', 'r') as file: # relative to where `locust` command is run
         config = json.load(file)
         validate(config, login_util.config_schema)
-    with open(config['resource_dir'] + 'resources.txt', 'r') as file:
+    with open(config['resource_dir'] + 'resources.txt', 'r') as file: # relative to where `locust` command is run
         for line in file:
             resource_list.append(line.rstrip())
-    with open(config['resource_dir'] + 'units.txt', 'r') as file:
+    with open(config['resource_dir'] + 'units.txt', 'r') as file: # relative to where `locust` command is run
         for line in file:
             unit_list.append(line.rstrip())
 
@@ -63,11 +63,10 @@ load_config_file()  # call this function on module level for class to attribute 
 # -> locust @events and their hooks
 # -> class instantiation (w/ instance attribute values are calculated here, when changed in __init__)
 
-class QuickstartUser(HttpUser):
+class QuickstartUser(FastHttpUser):
     host = config['hostname']
     timeout = config['timeout']
     retries = config['retries']
-
     def __init__(self, *args, **kwargs):
         global global_id
         self.id = global_id
@@ -77,7 +76,6 @@ class QuickstartUser(HttpUser):
     @task
     def load_test(self):
         print('global id ', self.id)
-
         token, groupToken = login_util.get_tokens(self, config)
         headers = {'AuthToken': token}
 
